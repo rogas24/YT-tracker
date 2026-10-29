@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Трекер каналов</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='6' height='6' rx='1.5' fill='%2322a861'/%3E%3Crect x='9' y='1' width='6' height='6' rx='1.5' fill='%233d7be0'/%3E%3Crect x='1' y='9' width='6' height='6' rx='1.5' fill='%23e0484e'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1.5' fill='%2322a861'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: шапка с месяцем, ниже плотная сетка компактных карточек каналов */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --line: #e4e7ec; --fg: #14171c; --muted: #7a818c;
+  --done: #22a861; --off: #3d7be0; --off-soft: #dfe9fb;
+  --miss: #e0484e; --miss-soft: #fbe2e3;
+  --empty: #eef0f3; --today: #14171c; --shadow: 0 8px 24px rgba(20,23,28,.14);
+  --f-body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #171a20; --line: #262a32; --fg: #eef0f3; --muted: #8a919c;
+  --done: #34c477; --off: #5b95f0; --off-soft: #1a2a45;
+  --miss: #f0646a; --miss-soft: #3a1c1f; --empty: #1f232a; --today: #eef0f3; --shadow: 0 8px 24px rgba(0,0,0,.5); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #171a20; --line: #262a32; --fg: #eef0f3; --muted: #8a919c;
+  --done: #34c477; --off: #5b95f0; --off-soft: #1a2a45;
+  --miss: #f0646a; --miss-soft: #3a1c1f; --empty: #1f232a; --today: #eef0f3; --shadow: 0 8px 24px rgba(0,0,0,.5); color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.4;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px }
+.wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px }
+button, input { font: inherit; color: inherit }
+button { cursor: pointer }
+:focus-visible { outline: 2px solid var(--off); outline-offset: 2px }
+
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px }
+h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em }
+.month { display: flex; align-items: center; gap: 4px }
+.month span { font-weight: 600; min-width: 130px; text-align: center }
+.ghost { background: none; border: 1px solid var(--line); border-radius: 8px; width: 32px; height: 32px; display: grid; place-items: center; color: var(--muted) }
+.ghost:hover { color: var(--fg); border-color: var(--muted) }
+.txtbtn { background: none; border: 0; color: var(--muted); font-size: 12px; padding: 4px 6px; border-radius: 6px }
+.txtbtn:hover { color: var(--fg); background: var(--empty) }
+
+.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between }
+.add { display: flex; gap: 8px; flex: 1 1 320px; max-width: 460px }
+.add input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; outline: none }
+.add input:focus { border-color: var(--muted) }
+.add button { background: var(--fg); color: var(--bg); border: 0; border-radius: 10px; padding: 0 16px; font-weight: 600 }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted) }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.card-top { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.ava { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; overflow: hidden; background: var(--empty);
+  color: var(--muted); font-weight: 600; font-size: 13px; display: grid; place-items: center; position: relative }
+.ava img { width: 100%; height: 100%; object-fit: cover; display: block }
+.ava:hover::after { content: "＋"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.45); color: #fff; font-size: 14px }
+.meta { min-width: 0; flex: 1 }
+.card h2 { font-size: 14px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.stats { display: flex; gap: 8px; font-family: var(--f-num); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted) }
+.s-done { color: var(--done) } .s-off { color: var(--off) } .s-miss { color: var(--miss) }
+.x { flex: none; align-self: flex-start; background: none; border: 0; color: var(--muted); width: 22px; height: 22px; border-radius: 6px; font-size: 15px; line-height: 1; opacity: .5 }
+.card:hover .x { opacity: 1 }
+.x:hover { background: var(--empty); color: var(--miss) }
+.confirm { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted) }
+.danger { color: var(--miss) }
+
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px }
+.wd { font-size: 9px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: .05em }
+.day { aspect-ratio: 1; max-width: 100%; border: 0; padding: 0; border-radius: 5px; background: var(--empty); color: var(--muted);
+  font-family: var(--f-num); font-size: 10px; font-variant-numeric: tabular-nums; display: grid; place-items: center }
+.day:hover { box-shadow: inset 0 0 0 1px var(--muted) }
+.day.done { background: var(--done); color: #fff }
+.day.off { background: var(--off); color: #fff }
+.day.miss { background: var(--miss-soft); color: var(--miss) }
+.day.today { box-shadow: inset 0 0 0 2px var(--today) }
+.day.future { background: transparent; box-shadow: inset 0 0 0 1px var(--line) }
+.day.future.off { background: var(--off-soft); color: var(--off); box-shadow: none }
+.day.sel { box-shadow: 0 0 0 2px var(--fg) }
+.pad { visibility: hidden }
+
+.menu { position: fixed; z-index: 50; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 170px }
+.menu .mh { font-size: 11px; color: var(--muted); padding: 4px 8px 6px; font-family: var(--f-num) }
+.menu button { display: flex; align-items: center; gap: 8px; background: none; border: 0; border-radius: 6px; padding: 7px 8px; text-align: left; font-size: 13px }
+.menu button:hover, .menu button:focus-visible { background: var(--empty) }
+.menu button.on { font-weight: 600 }
+.menu i { width: 10px; height: 10px; border-radius: 3px; flex: none }
+
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; border: 1px dashed var(--line); border-radius: 12px }
+.note { font-size: 12px; color: var(--muted); text-align: center; margin: 0 }
+
+.acct { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted) }
+.auth { max-width: 360px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px }
+.auth h2 { margin: 0; font-size: 18px }
+.auth p { margin: 0; color: var(--muted); font-size: 13px }
+.tabs { display: flex; background: var(--empty); border-radius: 9px; padding: 3px }
+.tabs button { flex: 1; border: 0; background: none; padding: 7px; border-radius: 7px; color: var(--muted) }
+.tabs button.on { background: var(--surface); color: var(--fg); font-weight: 600 }
+.auth input { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; outline: none; width: 100% }
+.auth input:focus { border-color: var(--muted) }
+.primary { background: var(--fg); color: var(--bg); border: 0; border-radius: 10px; padding: 10px; font-weight: 600 }
+.primary:disabled { opacity: .5 }
+.msg { font-size: 13px; min-height: 18px }
+.msg.err { color: var(--miss) } .msg.ok { color: var(--done) }
+.sync { font-size: 11px; color: var(--muted) }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Трекер каналов</h1>
+    <div class="month" id="monthNav" hidden>
+      <button class="ghost" id="prev" aria-label="Предыдущий месяц">‹</button>
+      <span id="mlabel"></span>
+      <button class="ghost" id="next" aria-label="Следующий месяц">›</button>
+      <button class="txtbtn" id="todayBtn">Сегодня</button>
+    </div>
+    <div class="acct" id="acct" hidden><span id="acctLabel"></span><span class="sync" id="sync"></span><button class="txtbtn" id="logout">Выйти</button></div>
+  </header>
+
+  <form class="auth" id="auth" hidden>
+    <h2>Вход</h2>
+    <p>Аккаунт нужен, чтобы каналы были одинаковые на всех устройствах.</p>
+    <div class="tabs"><button type="button" data-m="in" class="on">Вход</button><button type="button" data-m="up">Регистрация</button></div>
+    <input id="email" type="email" placeholder="Почта" autocomplete="email" required>
+    <input id="pass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password" minlength="6" required>
+    <button class="primary" id="authBtn" type="submit">Войти</button>
+    <div class="msg" id="authMsg"></div>
+    <button class="txtbtn" type="button" id="localBtn">Без входа, только в этом браузере</button>
+  </form>
+
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="bar">
+      <form class="add" id="addForm">
+        <input id="chName" placeholder="Название канала" maxlength="60" autocomplete="off">
+        <button type="submit">Добавить</button>
+      </form>
+      <div class="legend">
+        <span><i style="background:var(--done)"></i>Ролик</span>
+        <span><i style="background:var(--off)"></i>Выходной</span>
+        <span><i style="background:var(--miss-soft);box-shadow:inset 0 0 0 1px var(--miss)"></i>Пропуск</span>
+      </div>
+    </div>
+    <div id="list"></div>
+    <p class="note">Клик по дню открывает выбор. Клик по кружку слева от названия меняет аватарку.</p>
+  </div>
+</div>
+<input type="file" id="avaInput" accept="image/*" hidden>
+<div class="menu" id="menu" hidden></div>
+
+<script>
+// ====== НАСТРОЙКА: вставь сюда данные из Supabase (Project Settings → API) ======
+const SUPABASE_URL = "";      // например "https://abcdxyz.supabase.co"
+const SUPABASE_KEY = "";      // ключ "anon public"
+// ===============================================================================
+(() => {
+  const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+  const MONTHS_G = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  const WD = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+  const pad2 = n => String(n).padStart(2, "0");
+  const key = d => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  const todayKey = () => key(new Date());
+  const $ = id => document.getElementById(id);
+
+  let view = new Date(); view.setDate(1);
+  let channels = [];
+  let confirmId = null;
+  let menuFor = null;
+  let sb = null, user = null, mode = null; // mode: "cloud" | "local"
+
+  // ---------- локальное хранилище (всегда держим копию в браузере) ----------
+  const lsKey = () => "yt-tracker:" + (user ? user.id : "local");
+  const lsLoad = () => { try { return JSON.parse(localStorage.getItem(lsKey())) || [] } catch { return [] } };
+  const lsSave = () => { try { localStorage.setItem(lsKey(), JSON.stringify(channels)) } catch {} };
+
+  // ---------- облако (Supabase) ----------
+  const pending = {}; const timers = {};
+  function setSync(t) { $("sync").textContent = t }
+  function cloudSave(ch) {
+    if (mode !== "cloud") return;
+    pending[ch.id] = ch; clearTimeout(timers[ch.id]);
+    setSync("сохраняю…");
+    timers[ch.id] = setTimeout(async () => {
+      const c = pending[ch.id]; delete pending[ch.id];
+      const { error } = await sb.from("channels").upsert({
+        id: c.id, user_id: user.id, name: c.name, start: c.start, created: c.created, days: c.days, avatar: c.avatar || ""
+      });
+      setSync(error ? "ошибка сохранения" : "сохранено");
+      if (error) console.warn(error);
+    }, 400);
+  }
+  async function cloudRemove(id) {
+    if (mode !== "cloud") return;
+    const { error } = await sb.from("channels").delete().eq("id", id);
+    if (error) { setSync("ошибка удаления"); console.warn(error) }
+  }
+  async function cloudLoad() {
+    setSync("загружаю…");
+    const { data, error } = await sb.from("channels").select("*");
+    if (error) { setSync("нет связи, показана копия из браузера"); console.warn(error); return }
+    if (!data.length) {
+      // первый вход: перенести то, что было в браузере без аккаунта
+      const local = (() => { try { return JSON.parse(localStorage.getItem("yt-tracker:local")) || [] } catch { return [] } })();
+      if (local.length) { channels = local; local.forEach(cloudSave); render(); return }
+    }
+    channels = data.map(x => ({ id: x.id, name: x.name, start: x.start, created: Number(x.created) || 0, days: x.days || {}, avatar: x.avatar || "" }));
+    lsSave(); render(); setSync("синхронизировано");
+  }
+
+  function save(ch) { lsSave(); cloudSave(ch) }
+
+  // ---------- логика дней ----------
+  function status(ch, k, tk) {
+    const v = ch.days && ch.days[k];
+    if (v === "done" || v === "off" || v === "miss") return v;
+    if (k < tk && k >= ch.start) return "miss";
+    return "";
+  }
+  function monthStats(ch) {
+    const tk = todayKey(); const y = view.getFullYear(), m = view.getMonth();
+    const n = new Date(y, m + 1, 0).getDate(); let done = 0, off = 0, miss = 0;
+    for (let d = 1; d <= n; d++) {
+      const s = status(ch, key(new Date(y, m, d)), tk);
+      if (s === "done") done++; else if (s === "off") off++; else if (s === "miss") miss++;
+    }
+    return { done, off, miss };
+  }
+
+  function render() {
+    $("mlabel").textContent = MONTHS[view.getMonth()] + " " + view.getFullYear();
+    const list = $("list"); list.innerHTML = "";
+    if (!channels.length) {
+      const e = document.createElement("div"); e.className = "empty";
+      e.textContent = "Каналов пока нет. Впиши название сверху и нажми «Добавить».";
+      list.appendChild(e); return;
+    }
+    const wrap = document.createElement("div"); wrap.className = "cards";
+    const tk = todayKey(); const y = view.getFullYear(), m = view.getMonth();
+    const first = (new Date(y, m, 1).getDay() + 6) % 7; const n = new Date(y, m + 1, 0).getDate();
+
+    channels.slice().sort((a, b) => (a.created || 0) - (b.created || 0)).forEach(ch => {
+      const card = document.createElement("section"); card.className = "card";
+      if (confirmId === ch.id) {
+        const c = document.createElement("div"); c.className = "confirm";
+        const t = document.createElement("span"); t.textContent = "Удалить «" + ch.name + "»?";
+        t.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0";
+        const btns = document.createElement("span"); btns.style.cssText = "display:flex;flex:none";
+        const yes = document.createElement("button"); yes.className = "txtbtn danger"; yes.textContent = "Удалить"; yes.onclick = () => removeCh(ch);
+        const no = document.createElement("button"); no.className = "txtbtn"; no.textContent = "Отмена"; no.onclick = () => { confirmId = null; render() };
+        btns.append(yes, no); c.append(t, btns); card.appendChild(c);
+      }
+      const top = document.createElement("div"); top.className = "card-top";
+      const ava = document.createElement("button"); ava.className = "ava"; ava.setAttribute("aria-label", "Сменить аватарку");
+      if (ch.avatar) { const img = document.createElement("img"); img.src = ch.avatar; img.alt = ""; ava.appendChild(img) }
+      else ava.textContent = (ch.name.trim()[0] || "?").toUpperCase();
+      ava.onclick = () => pickAvatar(ch);
+      const meta = document.createElement("div"); meta.className = "meta";
+      const h = document.createElement("h2"); h.textContent = ch.name; h.title = ch.name;
+      const st = monthStats(ch);
+      const stats = document.createElement("div"); stats.className = "stats";
+      stats.innerHTML = `<span class="s-done">${st.done} рол.</span><span class="s-off">${st.off} вых.</span><span class="s-miss">${st.miss} проп.</span>`;
+      meta.append(h, stats);
+      const x = document.createElement("button"); x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Удалить канал");
+      x.onclick = () => { confirmId = ch.id; render() };
+      top.append(ava, meta, x);
+
+      const grid = document.createElement("div"); grid.className = "grid";
+      WD.forEach(w => { const e = document.createElement("div"); e.className = "wd"; e.textContent = w[0]; grid.appendChild(e) });
+      for (let i = 0; i < first; i++) { const p = document.createElement("div"); p.className = "pad"; grid.appendChild(p) }
+      for (let d = 1; d <= n; d++) {
+        const k = key(new Date(y, m, d)); const s = status(ch, k, tk);
+        const b = document.createElement("button"); b.className = "day"; b.textContent = d;
+        if (s) b.classList.add(s);
+        if (k === tk) b.classList.add("today");
+        if (k > tk) b.classList.add("future");
+        if (menuFor && menuFor.ch.id === ch.id && menuFor.k === k) b.classList.add("sel");
+        b.addEventListener("click", ev => { ev.stopPropagation(); openMenu(ch, k, b) });
+        grid.appendChild(b);
+      }
+      card.append(top, grid); wrap.appendChild(card);
+    });
+    list.appendChild(wrap);
+  }
+
+  // ---------- меню выбора ----------
+  const menu = $("menu");
+  function openMenu(ch, k, el) {
+    if (menuFor && menuFor.ch.id === ch.id && menuFor.k === k) { closeMenu(); return }
+    menuFor = { ch, k };
+    const cur = ch.days?.[k] || "";
+    const [, mm, dd] = k.split("-").map(Number);
+    menu.innerHTML = "";
+    const hd = document.createElement("div"); hd.className = "mh"; hd.textContent = dd + " " + MONTHS_G[mm - 1] + " · " + ch.name;
+    menu.appendChild(hd);
+    const opts = [];
+    if (k <= todayKey()) { opts.push(["done", "Выложил ролик", "var(--done)"]); opts.push(["miss", "Пропуск", "var(--miss)"]) }
+    opts.push(["off", "Выходной", "var(--off)"]);
+    opts.push(["", "Очистить", "transparent"]);
+    opts.forEach(([v, label, c]) => {
+      const b = document.createElement("button");
+      b.innerHTML = `<i style="background:${c};${v ? "" : "box-shadow:inset 0 0 0 1px var(--muted)"}"></i>`;
+      b.append(label + (cur === v && v ? " ✓" : ""));
+      if (cur === v) b.classList.add("on");
+      b.onclick = ev => { ev.stopPropagation(); setDay(ch, k, v); closeMenu() };
+      menu.appendChild(b);
+    });
+    menu.hidden = false;
+    const r = el.getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - mw / 2), window.innerWidth - mw - 8);
+    let top = r.bottom + 6; if (top + mh > window.innerHeight - 8) top = r.top - mh - 6;
+    menu.style.left = left + "px"; menu.style.top = Math.max(8, top) + "px";
+    render();
+    menu.querySelector("button")?.focus({ preventScroll: true });
+  }
+  function closeMenu() { if (!menuFor) return; menuFor = null; menu.hidden = true; render() }
+  document.addEventListener("click", e => { if (!menu.contains(e.target)) closeMenu() });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu() });
+  window.addEventListener("scroll", () => closeMenu(), { passive: true });
+  window.addEventListener("resize", () => closeMenu());
+
+  function setDay(ch, k, v) {
+    ch.days = ch.days || {};
+    if (v) ch.days[k] = v; else delete ch.days[k];
+    if (v && k < ch.start) ch.start = k;
+    render(); save(ch);
+  }
+
+  // ---------- аватарки ----------
+  const avaInput = $("avaInput"); let avaFor = null;
+  function pickAvatar(ch) { avaFor = ch; avaInput.value = ""; avaInput.click() }
+  avaInput.addEventListener("change", () => {
+    const f = avaInput.files && avaInput.files[0]; if (!f || !avaFor) return;
+    const ch = avaFor; const url = URL.createObjectURL(f); const img = new Image();
+    img.onload = () => {
+      const S = 96, c = document.createElement("canvas"); c.width = c.height = S;
+      const s = Math.min(img.width, img.height);
+      c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, S, S);
+      URL.revokeObjectURL(url);
+      ch.avatar = c.toDataURL("image/jpeg", 0.85);
+      render(); save(ch);
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  });
+
+  function addCh(name) {
+    const id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const ch = { id, name, start: todayKey(), created: Date.now(), days: {}, avatar: "" };
+    channels.push(ch); render(); save(ch);
+  }
+  function removeCh(ch) {
+    channels = channels.filter(c => c.id !== ch.id); confirmId = null; render(); lsSave(); cloudRemove(ch.id);
+  }
+
+  $("addForm").addEventListener("submit", e => {
+    e.preventDefault(); const inp = $("chName");
+    const v = inp.value.trim(); if (!v) return; inp.value = ""; addCh(v);
+  });
+  $("prev").onclick = () => { view.setMonth(view.getMonth() - 1); render() };
+  $("next").onclick = () => { view.setMonth(view.getMonth() + 1); render() };
+  $("todayBtn").onclick = () => { view = new Date(); view.setDate(1); render() };
+
+  let lastDay = todayKey();
+  setInterval(() => { if (todayKey() !== lastDay) { lastDay = todayKey(); render() } }, 60000);
+  // вернулся на вкладку — подтянуть изменения с других устройств
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && mode === "cloud" && !Object.keys(pending).length) cloudLoad();
+  });
+
+  // ---------- вход / регистрация ----------
+  function showApp(m) {
+    mode = m;
+    $("auth").hidden = true; $("app").hidden = false; $("monthNav").hidden = false;
+    $("acct").hidden = false;
+    $("acctLabel").textContent = m === "cloud" ? user.email : "только этот браузер";
+    $("logout").textContent = m === "cloud" ? "Выйти" : "Войти";
+    channels = lsLoad(); render();
+    if (m === "cloud") cloudLoad(); else setSync("");
+  }
+  function showAuth() {
+    mode = null; user = null;
+    $("app").hidden = true; $("monthNav").hidden = true; $("acct").hidden = true; $("auth").hidden = false;
+  }
+
+  let authMode = "in";
+  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+    authMode = b.dataset.m;
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+    $("auth").querySelector("h2").textContent = authMode === "in" ? "Вход" : "Регистрация";
+    $("authBtn").textContent = authMode === "in" ? "Войти" : "Создать аккаунт";
+    $("pass").autocomplete = authMode === "in" ? "current-password" : "new-password";
+    $("authMsg").textContent = "";
+  });
+  $("auth").addEventListener("submit", async e => {
+    e.preventDefault();
+    const msg = $("authMsg"); msg.className = "msg"; msg.textContent = "";
+    if (!sb) { msg.className = "msg err"; msg.textContent = "Сайт не подключён к Supabase. Впиши SUPABASE_URL и SUPABASE_KEY в index.html."; return }
+    const email = $("email").value.trim(), password = $("pass").value;
+    $("authBtn").disabled = true;
+    const res = authMode === "in"
+      ? await sb.auth.signInWithPassword({ email, password })
+      : await sb.auth.signUp({ email, password });
+    $("authBtn").disabled = false;
+    if (res.error) {
+      msg.className = "msg err";
+      const t = res.error.message || "";
+      msg.textContent = /Invalid login/i.test(t) ? "Неверная почта или пароль." :
+        /already registered/i.test(t) ? "Такая почта уже зарегистрирована, войди." :
+        /not confirmed/i.test(t) ? "Почта не подтверждена. Открой письмо от Supabase." : t;
+      return;
+    }
+    if (authMode === "up" && !res.data.session) {
+      msg.className = "msg ok"; msg.textContent = "Аккаунт создан. Подтверди почту по ссылке из письма и войди.";
+      return;
+    }
+    user = res.data.user; showApp("cloud");
+  });
+  $("localBtn").onclick = () => { user = null; showApp("local") };
+  $("logout").onclick = async () => {
+    if (mode === "cloud") await sb.auth.signOut();
+    showAuth();
+  };
+
+  (async () => {
+    if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const { data } = await sb.auth.getSession();
+      if (data.session) { user = data.session.user; showApp("cloud"); return }
+      showAuth();
+    } else {
+      showApp("local");
+      $("logout").hidden = true;
+    }
+  })();
+})();
+</script>
+</body>
+</html>
